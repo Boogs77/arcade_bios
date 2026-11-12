@@ -1,0 +1,6 @@
+# build output (sh make.sh, tools, tests)
+tmp/
+screenshots/
+tests/
+# local only
+CLAUDE.md
