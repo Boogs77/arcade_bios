@@ -10,8 +10,9 @@
 ; 2. The game page: a preview (title screen of the game, 128x96 pixels), who made the game
 ;    that inspired it, the players and the description (UP/DOWN scroll it).
 ;    START or BUTTON 1 load and run the game, BUTTON 2 goes back to the list.
-; The TEST switch opens the input test. On the serial port: W WozMon, B BASIC,
-; I system information, T input test (help is sent at every start).
+; Power-on shows the title screen first (tests_menu.s). The TEST switch opens the system test,
+; the SERVICE switch the joystick test. On the serial port: W WozMon, B BASIC,
+; I system information, T system test, J joystick test (help is sent at every start).
 ;
 ; The list comes from the ARCADE CATALOG on the SD (written by tools/make_arcade_sd.mjs):
 ;   sector CAT_LBA (24576, byte $00C00000), after the documents and the stories of the full SD:
@@ -62,13 +63,15 @@ FE_HASCAT  = $1206          ; 1 = the catalog is on the SD
 FE_LBA     = $1207          ; 2 bytes: sector for fe_read (the high 16 bits are 0)
 FE_TXTOFS  = $1209          ; first description line shown
 FE_TXTN    = $120A          ; description lines
-FE_HOLD    = $120B          ; hold counter of the input test
+FE_HOLD    = $120B          ; frames left on the title screen
 FE_NEW     = $120C          ; new presses (with auto-repeat) of this frame
 FE_SYSNEW  = $120D          ; new system presses of this frame
 FE_CUR     = $120E          ; joystick bits now
 FE_SCAN    = $120F          ; directory page (list without catalog)
 FE_DPAGES  = $1210          ; directory pages
 FE_IDX     = $1211          ; entry in the directory page
+FE_SPLASH  = $1212          ; 1 = title screen at this start (power-on / RESET)
+FE_TESTED  = $1213          ; 4 bytes: inputs pressed at least once in the joystick test (P1, P2, coins), count shown
 FE_TITLE   = $1220          ; 32 bytes: cabinet title
 FE_TEXT    = $1000          ; text sector of the game page (also the directory buffer)
 FE_INDEX   = $2000          ; catalog index: 255 * 32 bytes, up to $3FDF
@@ -108,24 +111,50 @@ SD_DIR_NAMES  = SD_DIR_BUF+96
 ; =============================================================================
 ; RESET / JT_SHOW_MENU
 ; =============================================================================
+; RESET: the title screen first, then the list
+ARC_POWER_ON:
+    lda #1
+    bra fe_start
+
+; JT_SHOW_MENU, a program that ends, both START held in a game: straight to the list
 SHOW_MENU:
+    lda #0
+fe_start:
     sei
     cld
     ldx #$FF
     txs
+    sta FE_SPLASH
     jsr INIT_SERIAL                         ; (CLI: no interrupt source is enabled)
     jsr arc_io_init                         ; VIAs, sound off
     stz sd_type                             ; SD to be initialized again
     stz FE_COUNT
     stz FE_SEL
     stz FE_TOP
-    stz FE_SYSPREV                          ; TEST held at power-on opens the input test
+    stz FE_SYSPREV                          ; TEST or SERVICE held at power-on open their test
     jsr arc_read_joy
     sta FE_PREV
     jsr g2_init
     lda #<ser_help
     ldx #>ser_help
     jsr ser_puts                            ; help for a terminal on the serial port
+    lda FE_SPLASH
+    beq fe_load
+    jsr fe_splash                           ; title screen; the SD is read while it is shown
+    jsr fe_load_catalog
+    lda #150                                ; at least 2.5 s, a button or START skips it
+    sta FE_HOLD
+@title:
+    jsr fe_input
+    lda FE_NEW
+    and #(J_START | J_B1 | J_B2 | J_B3)
+    bne @title_end
+    dec FE_HOLD
+    bne @title
+@title_end:
+    lda FE_COUNT
+    beq fe_no_games
+    jmp fe_list
 
 fe_load:
     jsr g2_cls
@@ -134,7 +163,7 @@ fe_load:
     jsr fe_load_catalog
     lda FE_COUNT
     bne fe_list
-    ; no games: no card, no directory, or nothing to show
+fe_no_games:                                ; no card, no directory, or nothing to show
     jsr g2_cls
     jsr fe_draw_title
     PUTS_AT 9, 4, txt_nogames
@@ -680,150 +709,40 @@ crt_puts:
     rts
 
 ; =============================================================================
-; INPUT TEST (TEST switch, or T on the serial port)
-; =============================================================================
-fe_test:
-    jsr g2_cls
-    lda #0
-    sta G_ROW
-    lda #$80
-    jsr g2_clear_row
-    lda #<txt_test_title
-    ldx #>txt_test_title
-    jsr g2_puts_center
-    stz G_ATTR
-    PUTS_AT 2, 1, txt_test_head
-    PUTS_AT 4, 1, txt_test_rows
-    PUTS_AT 21, 1, txt_test_help1
-    PUTS_AT 22, 1, txt_test_help2
-    stz FE_HOLD
-@loop:
-    jsr fe_input_nocmd
-    ; player columns: P1 at 13, P2 at 20; rows 4-11 = bits 0-7
-    lda JOY_P1
-    eor #$FF
-    ldx #13
-    jsr fe_test_col
-    lda JOY_P2
-    eor #$FF
-    ldx #20
-    jsr fe_test_col
-    jsr arc_read_sys
-    sta G_T2
-    lda #12
-    sta G_ROW                               ; COIN
-    lda #13
-    ldx #SYS_COIN1
-    jsr fe_test_mark
-    lda #20
-    ldx #SYS_COIN2
-    jsr fe_test_mark
-    lda #14
-    sta G_ROW
-    lda #13
-    ldx #SYS_TEST
-    jsr fe_test_mark
-    lda #15
-    sta G_ROW
-    lda #13
-    ldx #SYS_SERVICE
-    jsr fe_test_mark
-    ; exits: TEST again, a byte on the serial port, both START held 2 s
-    lda FE_SYSNEW
-    and #SYS_TEST
-    bne @exit
-    lda ACIA_STATUS
-    and #$08
-    beq @no_ser
-    lda ACIA_DATA
-    bra @exit
-@no_ser:
-    lda JOY_P1
-    ora JOY_P2
-    bmi @release                            ; bit 7 = 1: a START is not pressed
-    inc FE_HOLD
-    lda FE_HOLD
-    cmp #HOLD_FRAMES
-    bcc @loop
-    bra @exit
-@release:
-    stz FE_HOLD
-    bra @loop
-@exit:
-    lda FE_COUNT
-    bne @to_list
-    jmp fe_load
-@to_list:
-    jmp fe_list
-
-; fe_test_col: A = bits (1 = pressed), X = column: rows 4-11 "ON" / "--"
-fe_test_col:
-    sta G_T2
-    lda #4
-    sta G_ROW
-@l:
-    txa
-    phx
-    ldx #1
-    jsr fe_test_mark
-    plx
-    lsr G_T2
-    inc G_ROW
-    lda G_ROW
-    cmp #12
-    bne @l
-    rts
-
-; fe_test_mark: A = column, X = mask in G_T2: "ON" (selection colours) or "--" at G_ROW
-fe_test_mark:
-    sta G_COL
-    txa
-    and G_T2
-    php
-    jsr g2_pos
-    plp
-    beq @off
-    lda #$80
-    sta G_ATTR
-    lda #'O'
-    jsr g2_putc
-    lda #'N'
-    jsr g2_putc
-    stz G_ATTR
-    rts
-@off:
-    lda #'-'
-    jsr g2_putc
-    lda #'-'
-    jmp g2_putc
-
-; =============================================================================
 ; INPUT: one frame
 ; =============================================================================
 ; fe_input: waits for the next frame, reads the joysticks (FE_NEW: new presses, with
 ; auto-repeat of the directions) and the system inputs (FE_SYSNEW), and answers the serial
-; port (W B I T) and the TEST switch: those never come back here.
+; port (W B I T J) and the TEST / SERVICE switches: those never come back here.
 fe_input:
     jsr fe_input_nocmd
     lda FE_SYSNEW
-    and #SYS_TEST
+    bit #SYS_TEST
     beq @no_test
-    jmp fe_test
+    jmp fe_systest
 @no_test:
+    bit #SYS_SERVICE
+    beq @no_service
+    jmp fe_joytest
+@no_service:
     lda ACIA_STATUS
     and #$08
     beq @rts
     lda ACIA_DATA
     and #$DF                                ; lower case -> upper case
     cmp #'W'
-    beq fe_go_woz
+    jeq fe_go_woz
     cmp #'B'
-    beq fe_go_basic
+    jeq fe_go_basic
     cmp #'I'
-    beq fe_go_info
+    jeq fe_go_info
     cmp #'T'
+    bne @not_t
+    jmp fe_systest
+@not_t:
+    cmp #'J'
     bne @help
-    jmp fe_test
+    jmp fe_joytest
 @help:
     lda #<ser_help
     ldx #>ser_help
@@ -1548,17 +1467,10 @@ txt_loading:    .byte "LOADING FROM SD, PLEASE WAIT...", $0A, $0A, 0
 txt_load_err:   .byte "SD LOAD ERROR", $0A
                 .byte "(CARD, DIRECTORY OR PROGRAM PARAMS)", $0A, $0A
                 .byte "PRESS A BUTTON...", 0
-txt_test_title: .byte "INPUT TEST", 0
-txt_test_head:  .byte "             P1     P2", 0
-txt_test_rows:  .byte "UP", $0A, "DOWN", $0A, "LEFT", $0A, "RIGHT", $0A
-                .byte "BUTTON 1", $0A, "BUTTON 2", $0A, "BUTTON 3", $0A, "START", $0A
-                .byte "COIN", $0A, $0A, "TEST", $0A, "SERVICE", 0
-txt_test_help1: .byte "EXIT: TEST AGAIN, OR HOLD", 0
-txt_test_help2: .byte "BOTH START FOR 2 SECONDS", 0
 
 ser_help:
     .byte $0D, $0A, "MINIVIC ARCADE BIOS ", BIOS_VER, $0D, $0A
-    .byte "W = WOZMON  B = BASIC  I = INFO  T = INPUT TEST", $0D, $0A, 0
+    .byte "W = WOZMON  B = BASIC  I = INFO", $0D, $0A, "T = SYSTEM TEST  J = JOYSTICK TEST", $0D, $0A, 0
 
 sys_info_text:
     .byte " ",$0D, $0A

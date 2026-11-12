@@ -66,6 +66,7 @@ IRQ_HANDLER:
 .include "serial_drv.s"
 .include "arcade_io.s"
 .include "frontend.s"
+.include "tests_menu.s"
 .include "crt_text_drv.s"
 .include "crt_g2_drv.s"
 
@@ -80,5 +81,5 @@ IRQ_HANDLER:
 
 .segment "RESETVEC"
                 .word   NMI_HANDLER ; NMI vector (VDP interrupt)
-                .word   SHOW_MENU   ; RESET vector: the game front-end
+                .word   ARC_POWER_ON ; RESET vector: title screen, then the game front-end
                 .word   IRQ_HANDLER ; IRQ vector

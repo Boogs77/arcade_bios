@@ -18,8 +18,9 @@ and a page for every game with a preview of its title screen, the game that insp
 | List | stick UP / DOWN choose, LEFT / RIGHT page, START or BUTTON 1 open |
 | Game page | START or BUTTON 1 play, BUTTON 2 back, UP / DOWN scroll the text |
 | In a game | P1 START + P2 START held for 2 s: back to the front-end |
-| Anywhere in the front-end | TEST switch: input test |
-| Serial terminal (19200 8-N-1) | `W` WozMon, `B` BASIC, `I` information, `T` input test |
+| Power-on | title screen ARCADE 6502, a button skips it |
+| Anywhere in the front-end | TEST switch: system test (CPU, ROM, RAM, VRAM, VDP, SD, audio, serial); SERVICE switch: joystick test |
+| Serial terminal (19200 8-N-1) | `W` WozMon, `B` BASIC, `I` information, `T` system test, `J` joystick test |
 
 ---
 

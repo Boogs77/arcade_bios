@@ -27,16 +27,38 @@ bit 6 **P1 COIN**, bit 7 **P2 COIN**.
 
 ## 📺 The front-end
 
-RESET, `JT_SHOW_MENU` and the exit from a game start the front-end (Graphics II, joystick only).
+At power-on (RESET) the **title screen** shows **ARCADE 6502** in big letters and **DEVELOPED BY BOOGS**
+for at least 2.5 seconds (a button or START skips it); the SD card is read meanwhile. `JT_SHOW_MENU` and the
+exit from a game go straight to the list.
 
 | Screen | Controls |
 | :--- | :--- |
 | **List** of the games | UP / DOWN one game (with auto-repeat, wraps around), LEFT / RIGHT one page of 16, START or BUTTON 1 opens the game page |
 | **Game page**: preview, inspiring game, players, description | START or BUTTON 1 play, BUTTON 2 back, UP / DOWN scroll the description |
-| **Input test** | TEST switch (also held at power-on) or `T` on the serial port; every input is shown live; exit with TEST again, a byte on the serial port, or both START held 2 s |
+| **System test** (TEST switch, `T` on the serial port) | everything but the joysticks, see below; exit with TEST again, START or a byte on the serial port |
+| **Joystick test** (SERVICE switch, `J` on the serial port) | the map of the 18 inputs, see below; exit with SERVICE again or a byte on the serial port |
 
-Both joysticks drive the menus. The MiniVIC Jukebox is the last entry of the list: the songs are played only
-through it. The coins are not used by the front-end yet (free play).
+A switch held at power-on opens its test before the list. Both joysticks drive the menus. The MiniVIC Jukebox is
+the last entry of the list: the songs are played only through it.
+
+### System test
+| Line | How |
+| :--- | :--- |
+| CPU 65C02 | `INC A` (a NOP on the NMOS 6502) |
+| ROM checksum | 16-bit sum of `$8000-$AFFF` and `$E000-$FFFF` compared with the sum written by `make.sh` at `$FDFE` |
+| RAM `$0200-$7FFF` | two address-dependent patterns written and read back (shows the failing address) |
+| VRAM 16 KB | the same, with the display off (shows the failing address) |
+| VDP frame | the F flag of the status comes back within a frame |
+| SD card | type of the card (SDSC V1, SDSC V2, SDHC) or NONE |
+| Games on SD | entries of the list, from the CATALOG or from the DIR(ectory) |
+| Audio right / left | a 440 Hz tone for half a second on each AY-3-8910: listen |
+| Serial 6551 | sends `ARCADE6502 SYSTEM TEST: SERIAL OK` |
+
+### Joystick test
+Every input of the two control panels: UP, DOWN, LEFT, RIGHT, BUTTON 1-3, START and COIN for P1 and P2.
+`--` not pressed yet, `ON` pressed now, `OK` pressed at least once; `TESTED n/18`, then `ALL 18 INPUTS OK`.
+
+The coins are not used by the front-end yet; the games use buttons 1 and 2 (they will be adapted later).
 
 **Leaving a game**: hold **P1 START and P2 START together for 2 seconds**. The NMI handler of the BIOS (called at
 every frame by the VDP) counts the frames and goes back to the front-end. The counter is kept in the T1 latch of
@@ -48,7 +70,7 @@ serial port, `JMP` to its entry point.
 ### Serial port
 
 At every start the BIOS sends `MINIVIC ARCADE BIOS <version>` and the commands:
-`W` WozMon, `B` Microsoft BASIC, `I` system information, `T` input test (any other byte repeats the help).
+`W` WozMon, `B` Microsoft BASIC, `I` system information, `T` system test, `J` joystick test (any other byte repeats the help).
 In WozMon, `FD0FR` goes back to the front-end.
 
 ---
@@ -101,13 +123,14 @@ entries the miniVIC BIOS adds later; the Arcade entries start at `$FD80`.
 | `$FD21` | `JT_KB_SET_MODE` | no keyboard: does nothing |
 | `$FD80` | `JT_ARC_INPUTS` | A = P1, X = P2 (bits as above), Y = bit 0 COIN 1, 1 COIN 2, 2 TEST, 3 SERVICE; **1 = pressed** |
 | `$FD83` | `JT_ARC_SILENCE` | both AY-3-8910 silent |
+| `$FDFE` | `ROM_SUM` | data: ROM checksum (not a jump) |
 
 ---
 
 ## 🧠 RAM used
 
 - `$0306` last joystick state of `JT_CHRIN_NOECHO`; the SD driver as in the KEYB/SD BIOS (`$0300-$033A`, zero page `$44-$4E`).
-- Front-end only (free again once a program is loaded): zero page `$50-$5D`, `$1000-$11FF` sector buffer,
+- Front-end only (free again once a program is loaded): zero page `$50-$5D` (tests `$60-$69`), `$1000-$11FF` sector buffer,
   `$1200-$123F` state, `$2000-$3FDF` catalog index, `$4000-$4BFF` preview.
 - VRAM in the front-end: patterns `$0000`, colours `$2000`, names `$3800`, sprites off.
 
@@ -117,15 +140,15 @@ entries the miniVIC BIOS adds later; the Arcade entries start at `$FD80`.
 
 `node test/run.mjs` runs `tmp/arcade.bin` on the emulator core with an Arcade machine (miniVIC boards without the
 keyboard, 8-bit joystick ports, coins and switches on the SD VIA): list, paging, auto-repeat, game page with
-preview and scrolling, launch with `[GAME] BUBBLES`, exit with both START, Jukebox, input test (also at power-on),
-serial commands, SD without the catalog, no card, jump table and `JT_ARC_INPUTS`. Screenshots in `screenshots/`.
+preview and scrolling, launch with `[GAME] BUBBLES`, exit with both START, Jukebox, title screen, joystick test and
+system test (also at power-on, and a bad ROM byte), serial commands, SD without the catalog, no card, jump table and
+`JT_ARC_INPUTS`. Screenshots in `screenshots/`.
 
 ---
 
 ## ❓ Open points
 
-- Coins and SERVICE outside the games (credits or free play): the front-end ignores them for now.
-- The pull-ups of TEST and SERVICE (R80, R81) go to the net `VCC1` in the schematic: to check that it is VCC.
+- Coins (credits) and the games with button 3 / START: later.
 - The emulator does not have the Arcade machine yet (`docs/TODO.md` of the emulator).
 - bo6502-SDbuilder could call `tools/make_arcade_sd.mjs` after `update_sd.py --mode full`.
 

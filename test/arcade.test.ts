@@ -27,8 +27,8 @@ class Arcade {
   sd = this.m.board<SdCardBoard>('sdcard')! as any;
   serial: number[] = [];
   sys = 0;
-  constructor(img: Uint8Array | null) {
-    this.m.loadRom(ROM);
+  constructor(img: Uint8Array | null, rom: Uint8Array = ROM) {
+    this.m.loadRom(rom);
     if (img) this.sd.card.insert(img.slice());
     const orig = this.sd.via.onPortAChange;
     this.sd.via.onPortAChange = (v: number) => { orig(v); this.sd.via.inputA &= ~this.sys & 0xFF; };
@@ -77,7 +77,7 @@ const inList = (a: Arcade) => { if (!a.g2) return false; const r = a.rows()[2]; 
 
 function bootList(img: Uint8Array) {
   const a = new Arcade(img);
-  a.waitFor(() => inList(a), 900, 'game list');
+  a.waitFor(() => inList(a), 1500, 'game list');
   a.frames(10);
   if (process.env.DUMP) console.log(a.rows().join(String.fromCharCode(10)), a.ram(0x1200), a.ram(0x1206));
   return a;
@@ -146,7 +146,8 @@ function launchAndExit(a: Arcade) {
   a.setJoy(ST, ST); a.frames(60); a.setJoy(0, 0); a.frames(30);
   assert(!inList(a), 'both START for 1 s: still in the game');
   a.setJoy(ST, ST); a.frames(130); a.setJoy(0, 0);
-  a.waitFor(() => inList(a), 900, 'front-end after both START held');
+  const back = a.waitFor(() => inList(a), 900, 'front-end after both START held');
+  assert(!a.rows().join('').includes('DEVELOPED BY') && back < 100, 'no title screen when leaving a game: ' + back);
   console.log('      launch [GAME] BUBBLES, back with both START held: ok');
 }
 
@@ -167,30 +168,85 @@ function jukebox() {
   console.log('      MiniVIC Jukebox from the list: ok');
 }
 
-function inputTest() {
+function titleScreen() {
+  const a = new Arcade(SD_ARCADE);
+  a.waitFor(() => a.g2 && a.rows()[20].includes('DEVELOPED BY BOOGS'), 120, 'title screen');
+  a.frames(5);
+  // big letters: patterns 28-31 in rows 2-8 (ARCADE) and 11-17 (6502)
+  let big = 0;
+  for (let r = 2; r <= 17; r++) for (let c = 0; c < 32; c++) { const n = a.nameAt(r, c); if (n >= 29 && n <= 31) big++; }
+  assert(big > 100, 'big letters: ' + big);
+  assert(a.nameAt(20, 0) >= 0x80, 'DEVELOPED BY bar');
+  a.shot('title');
+  const shown = a.waitFor(() => inList(a), 900, 'list after the title screen');
+  assert(shown > 100, 'title screen shown at least 2 s: ' + shown);
+  // a button skips it
+  const b = new Arcade(SD_ARCADE);
+  b.waitFor(() => b.g2 && b.rows()[20].includes('DEVELOPED BY BOOGS'), 120, 'title screen');
+  b.frames(80);                                       // the SD is read while the title is shown
+  b.press(B1);
+  b.waitFor(() => inList(b), 40, 'title skipped with button 1');
+  // JT_SHOW_MENU (and the exit from a game) do not show it again: checked in launchAndExit
+  console.log('      title screen ARCADE 6502 / DEVELOPED BY BOOGS: ok');
+}
+
+function joystickTest() {
   const a = bootList(SD_ARCADE);
-  a.setSys(TEST); a.frames(4); a.setSys(0);
-  a.waitFor(() => a.rows()[0].includes('INPUT TEST'), 30, 'input test');
-  a.setJoy(B3, ST); a.setSys(COIN1 | SERVICE); a.frames(3);
-  const r = a.rows();
+  a.setSys(SERVICE); a.frames(4); a.setSys(0);
+  a.waitFor(() => a.rows()[0].includes('JOYSTICK TEST'), 30, 'joystick test');
+  a.frames(2);
+  assert(a.rows()[14].includes('TESTED 0/18'), 'nothing tested: ' + a.rows()[14]);
+  a.setJoy(B3, ST); a.setSys(COIN1); a.frames(3);
+  let r = a.rows();
   assert(r[10].slice(13, 15) === 'ON' && r[10].slice(20, 22) === '--', 'P1 button 3: ' + r[10]);
   assert(r[11].slice(20, 22) === 'ON' && r[11].slice(13, 15) === '--', 'P2 start: ' + r[11]);
   assert(r[12].slice(13, 15) === 'ON' && r[12].slice(20, 22) === '--', 'coin 1: ' + r[12]);
-  assert(r[15].slice(13, 15) === 'ON' && r[14].slice(13, 15) === '--', 'service: ' + r[15]);
-  a.shot('input_test');
-  a.setJoy(0, 0); a.setSys(COIN2); a.frames(3);
-  assert(a.rows()[12].slice(20, 22) === 'ON', 'coin 2');
-  a.setSys(0); a.frames(3);
-  a.setSys(TEST); a.frames(3); a.setSys(0);
-  a.waitFor(() => inList(a), 30, 'back from the input test');
-  // TEST held at power-on opens the input test before the list
+  a.shot('joystick_test');
+  a.setJoy(0, 0); a.setSys(0); a.frames(3);
+  r = a.rows();
+  assert(r[10].slice(13, 15) === 'OK' && r[11].slice(20, 22) === 'OK' && r[12].slice(13, 15) === 'OK', 'tested: OK');
+  assert(r[14].includes('TESTED 3/18'), 'count: ' + r[14]);
+  // TEST does not leave the joystick test
+  for (const bit of [U, D, L, R, B1, B2, B3, ST]) { a.setJoy(bit, bit); a.frames(2); }
+  a.setJoy(0, 0); a.setSys(COIN2); a.frames(2); a.setSys(0); a.frames(3);
+  assert(a.rows()[14].includes('ALL 18 INPUTS OK'), 'all tested: ' + a.rows()[14]);
+  a.shot('joystick_test_all');
+  a.setSys(SERVICE); a.frames(3); a.setSys(0);
+  a.waitFor(() => inList(a), 30, 'back from the joystick test');
+  // SERVICE held at power-on
   const b = new Arcade(SD_ARCADE);
-  b.setSys(TEST);
-  b.waitFor(() => b.g2 && b.rows()[0].includes('INPUT TEST'), 300, 'input test at power-on');
+  b.setSys(SERVICE);
+  b.waitFor(() => b.g2 && b.rows()[0].includes('JOYSTICK TEST'), 300, 'joystick test at power-on');
   b.setSys(0); b.frames(3);
-  b.setJoy(ST, ST); b.frames(125); b.setJoy(0, 0);
-  b.waitFor(() => inList(b), 900, 'list after the input test (both START held)');
-  console.log('      input test (TEST switch, coins, service, button 3, start): ok');
+  b.send('x');
+  b.waitFor(() => inList(b) || b.rows().join('').includes('NO GAMES'), 900, 'out of the joystick test with the serial port');
+  console.log('      joystick test (SERVICE switch, every input mapped, coins): ok');
+}
+
+function systemTest() {
+  const a = bootList(SD_ARCADE);
+  a.serial.length = 0;
+  a.setSys(TEST); a.frames(4); a.setSys(0);
+  a.waitFor(() => a.rows()[11].includes('LINE SENT'), 1500, 'system test results');
+  const r = a.rows();
+  assert(r[0].includes('SYSTEM TEST'), 'title');
+  for (const [row, what] of [[2, 'CPU'], [3, 'ROM'], [4, 'RAM'], [5, 'VRAM'], [6, 'VDP']] as [number, string][])
+    assert(r[row].slice(21).trim() === 'OK', `${what}: ${r[row]}`);
+  assert(r[7].slice(21).trim() === 'SDSC V1', 'SD card: ' + r[7]);
+  assert(r[8].slice(21).trim() === '48 CATALOG', 'games: ' + r[8]);
+  assert(a.serialText().includes('SERIAL OK'), 'serial line');
+  a.frames(2);
+  a.shot('system_test');
+  a.press(ST);
+  a.waitFor(() => inList(a), 60, 'back from the system test with START');
+  assert(a.rows()[4].includes('1 vs 1 Basketball'), 'list read again');
+  // a bad ROM byte is found
+  const bad = ROM.slice(); bad[0x1234] ^= 0xFF;
+  const c = new Arcade(SD_ARCADE, bad);
+  c.setSys(TEST);
+  c.waitFor(() => c.g2 && c.rows()[11].includes('LINE SENT'), 2500, 'system test at power-on');
+  assert(c.rows()[3].slice(21).trim() === 'FAIL', 'bad ROM checksum: ' + c.rows()[3]);
+  console.log('      system test (TEST switch: CPU, ROM, RAM, VRAM, VDP, SD, audio, serial): ok');
 }
 
 function serialCommands() {
@@ -230,7 +286,7 @@ function plainSd() {
 
 function noCard() {
   const a = new Arcade(null);
-  a.waitFor(() => a.g2 && a.rows().join('').includes('NO GAMES FOUND'), 900, 'no card message');
+  a.waitFor(() => a.g2 && a.rows().join('').includes('NO GAMES FOUND'), 1500, 'no card message');
   a.shot('no_card');
   a.sd.card.insert(SD_ARCADE.slice());
   a.press(ST);
@@ -262,7 +318,9 @@ export default async function () {
   const a = listAndPage();
   launchAndExit(a);
   jukebox();
-  inputTest();
+  titleScreen();
+  joystickTest();
+  systemTest();
   serialCommands();
   plainSd();
   noCard();
