@@ -33,8 +33,9 @@ exit from a game go straight to the list.
 
 | Screen | Controls |
 | :--- | :--- |
-| **List** of the games | UP / DOWN one game (with auto-repeat, wraps around), LEFT / RIGHT one page of 16, START or BUTTON 1 opens the game page |
-| **Game page**: preview, inspiring game, players, description | START or BUTTON 1 play, BUTTON 2 back, UP / DOWN scroll the description |
+| **List** of the games | UP / DOWN one game (with auto-repeat, wraps around), LEFT / RIGHT one page of 16, START or BUTTON 1 opens the game page, BUTTON 2 the gallery |
+| **Gallery**: one game at a time, gameplay picture (a quarter of the screen), name in the selection bar, inspiring game, maker and players | LEFT / UP previous, RIGHT / DOWN next (wraps around), START or BUTTON 1 play, BUTTON 3 game page, BUTTON 2 back to the list (same game selected) |
+| **Game page**: gameplay picture, inspiring game, players, description | START or BUTTON 1 play, BUTTON 2 back (to the list or the gallery), UP / DOWN scroll the description |
 | **System test** (SERVICE switch, `T` on the serial port) | everything but the joysticks, see below; exit with SERVICE again, START or a byte on the serial port |
 | **Joystick test** (TEST switch, `J` on the serial port) | the map of the 18 inputs, see below; exit with TEST again or a byte on the serial port |
 
@@ -91,9 +92,11 @@ space of the full SD, after the stories of the miniVIC Z-Machine and before the 
 
 - The list: the GAME programs of the SD directory without the keyboard versions of Zork, in alphabetical order,
   then the **MiniVIC Jukebox**. The slot is the real SD slot: loading does not change.
-- The previews: every program is taken from the SD image, run for 450 frames on the core of the
-  [emulator](https://github.com/Boogs77/BO6502-miniVIC-emulator) (miniVIC, KEYB/SD BIOS), and its screen is reduced
-  to 128 x 96 pixels with 2 colours per 8-pixel row. PNG copies go to `tmp/previews/`.
+- The pictures: the gameplay screenshot of every game (`screenshots/<file>_game.png` of miniVIC_games, 512 x 384;
+  `screenshots/jukebox_play.png` of miniVIC_apps for the Jukebox) at half resolution, 128 x 96 pixels with 2 colours
+  per 8-pixel row. A program without a screenshot is run for 450 frames on the core of the
+  [emulator](https://github.com/Boogs77/BO6502-miniVIC-emulator) (miniVIC, KEYB/SD BIOS) and its screen is used.
+  PNG copies go to `tmp/previews/`. A picture takes about one second to read from the SD.
 - The texts: title, players and description from the games table of the
   [miniVIC_games](https://github.com/Boogs77/miniVIC_games) README; the inspiring game from the description
   (`Atari 1979: ...`), from `gameslist.md` (`original game in place of ...`), or from the `INSPIRED` table of
@@ -140,7 +143,7 @@ entries the miniVIC BIOS adds later; the Arcade entries start at `$FD80`.
 
 `node test/run.mjs` runs `tmp/arcade.bin` on the emulator core with an Arcade machine (miniVIC boards without the
 keyboard, 8-bit joystick ports, coins and switches on the SD VIA): list, paging, auto-repeat, game page with
-preview and scrolling, launch with `[GAME] BUBBLES`, exit with both START, Jukebox, title screen, joystick test and
+preview and scrolling, gallery (browse, game page and back, play), launch with `[GAME] BUBBLES`, exit with both START, Jukebox, title screen, joystick test and
 system test (also at power-on, and a bad ROM byte), serial commands, SD without the catalog, no card, jump table and
 `JT_ARC_INPUTS`. Screenshots in `screenshots/`.
 

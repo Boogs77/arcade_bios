@@ -168,6 +168,57 @@ function jukebox() {
   console.log('      MiniVIC Jukebox from the list: ok');
 }
 
+function gallery() {
+  const a = bootList(SD_ARCADE);
+  const galleryOf = (name: string, n: string) => {
+    a.waitFor(() => a.rows()[16].includes(name) && a.rows()[14].includes(n), 120, 'gallery ' + name + ' sel ' + a.ram(0x1201));
+    a.waitFor(() => a.nameAt(13, 23) === 128 + 95, 300, 'gallery picture ' + name);
+    a.frames(3);
+  };
+  a.press(D); a.press(D); a.press(D);                 // Bubbles
+  a.press(B2);
+  galleryOf('Bubbles', '4/48');
+  let r = a.rows();
+  assert(a.nameAt(16, 0) >= 0x80, 'name in the selection bar');
+  assert(r[18].includes('Inspired by: Bubbles') && r[19].includes('Williams 1982'), 'inspired by: ' + r[18]);
+  assert(r[7][5] === '<' && r[7][26] === '>', 'arrows');
+  a.shot('gallery');
+  a.press(R);
+  galleryOf('Centipede', '5/48');
+  assert(a.rows()[18].includes('Inspired by: Centipede'), 'next game');
+  a.press(0, L);                                      // either player
+  galleryOf('Bubbles', '4/48');
+  a.press(U);                                         // LEFT or UP
+  galleryOf('Breakout', '3/48');
+  a.press(L);
+  galleryOf('Asteroids', '2/48');
+  a.press(L);
+  galleryOf('1 vs 1 Basketball', '1/48');
+  a.press(L);
+  galleryOf('MiniVIC Jukebox', '48/48');              // wraps to the last
+  a.press(R);
+  galleryOf('1 vs 1 Basketball', '1/48');
+  a.press(R);
+  galleryOf('Asteroids', '2/48');
+  a.press(B3);                                        // the description
+  a.waitFor(() => a.rows()[15].includes('Inspired by: Asteroids'), 300, 'game page from the gallery');
+  a.waitFor(() => a.nameAt(13, 23) === 128 + 95, 300, 'page picture');
+  a.frames(3);
+  a.press(B2);                                        // back to the gallery
+  galleryOf('Asteroids', '2/48');
+  a.press(B2);                                        // back to the list, same game selected
+  a.waitFor(() => inList(a), 120, 'list from the gallery');
+  assert(a.rows()[2].trimEnd().endsWith('2/48') && a.nameAt(5, 2) >= 0x80 && a.rows()[5].includes('Asteroids'), 'selection kept');
+  const vr = a.vdp.vram;
+  assert(vr[0x2400 + 65 * 8] === 0x1B, 'selection font restored');
+  a.press(B2);
+  galleryOf('Asteroids', '2/48');
+  a.serial.length = 0;
+  a.press(ST);
+  a.waitFor(() => a.serialText().includes('[GAME] ASTEROIDS\r\n'), 1500, 'play from the gallery');
+  console.log('      gallery (BUTTON 2): name, inspired by, gameplay picture, browse, play: ok');
+}
+
 function titleScreen() {
   const a = new Arcade(SD_ARCADE);
   a.waitFor(() => a.g2 && a.rows()[20].includes('DEVELOPED BY BOOGS'), 120, 'title screen');
@@ -318,6 +369,7 @@ export default async function () {
   const a = listAndPage();
   launchAndExit(a);
   jukebox();
+  gallery();
   titleScreen();
   joystickTest();
   systemTest();

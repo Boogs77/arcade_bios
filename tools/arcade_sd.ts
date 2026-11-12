@@ -3,10 +3,12 @@
 //
 // - The list: the GAME programs of the SD directory (not the keyboard versions of Zork) in
 //   alphabetical order, then the MiniVIC Jukebox (the songs are played only through it).
-// - The previews: every program is taken from the SD image itself, run on the core of the
-//   bo6502-emulator (miniVIC with the KEYB/SD BIOS, this same SD inserted) for 450 frames
-//   like the games test of the emulator, and its screen is reduced to 128x96 pixels in TMS9918
-//   tiles (2 colours per 8-pixel row).
+// - The previews: the gameplay screenshot of the game (screenshots/<file>_game.png of
+//   miniVIC_games, 512x384, jukebox_play.png of miniVIC_apps for the Jukebox) at half resolution;
+//   without a screenshot the program is taken from the SD image and run on the core of the
+//   bo6502-emulator (miniVIC with the KEYB/SD BIOS, this same SD inserted) for 450 frames, like the
+//   games test of the emulator. The screen is reduced to 128x96 pixels (a quarter of the screen)
+//   in TMS9918 tiles (2 colours per 8-pixel row).
 // - The texts: title, players and description from the games table of the README of
 //   miniVIC_games, the inspiring game from the description ("Atari 1979: ...") or from
 //   gameslist.md ("original game in place of ..."), or from the INSPIRED table below.
@@ -15,7 +17,7 @@ import { join } from 'node:path';
 import { buildMachine, defaultConfig } from 'EMU/src/machines/profiles';
 import { SdCardBoard } from 'EMU/src/boards/Boards';
 import { TMS_PALETTE, SCREEN_W, BORDER_X, BORDER_Y } from 'EMU/src/devices/TMS9918A';
-import { deflateSync, crc32 } from 'node:zlib';
+import { deflateSync, inflateSync, crc32 } from 'node:zlib';
 
 export const CAT_LBA = 24576;
 const PAGE_OFS = 64;
@@ -134,6 +136,44 @@ function headerLines(title: string, info: GameInfo | undefined, inPlace: Map<str
 }
 
 /** program screen after `frames` frames (palette indices of the 256x192 active area) */
+/** an 8-bit RGB / RGBA PNG (not interlaced) as 256x192 palette indices (nearest colour) */
+export function screenFromPng(file: string): Uint8Array {
+  const d = readFileSync(file);
+  let w = 0, h = 0, type = 0, idat: Buffer[] = [];
+  for (let o = 8; o < d.length;) {
+    const len = d.readUInt32BE(o), t = d.toString('ascii', o + 4, o + 8), c = d.subarray(o + 8, o + 8 + len);
+    if (t === 'IHDR') {
+      w = c.readUInt32BE(0); h = c.readUInt32BE(4); type = c[9];
+      if (c[8] !== 8 || (type !== 2 && type !== 6) || c[12]) throw new Error(file + ': only 8-bit RGB/RGBA PNG');
+    } else if (t === 'IDAT') idat.push(c);
+    o += 12 + len;
+  }
+  const bpp = type === 6 ? 4 : 3, stride = w * bpp, raw = inflateSync(Buffer.concat(idat));
+  const px = Buffer.alloc(stride * h);
+  for (let y = 0; y < h; y++) {
+    const f = raw[y * (stride + 1)], line = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
+    for (let x = 0; x < stride; x++) {
+      const a = x >= bpp ? px[y * stride + x - bpp] : 0, b = y ? px[(y - 1) * stride + x] : 0;
+      const c = x >= bpp && y ? px[(y - 1) * stride + x - bpp] : 0;
+      let v = line[x];
+      if (f === 1) v += a; else if (f === 2) v += b; else if (f === 3) v += (a + b) >> 1;
+      else if (f === 4) { const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c); v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c; }
+      px[y * stride + x] = v & 0xFF;
+    }
+  }
+  const out = new Uint8Array(256 * 192);
+  for (let y = 0; y < 192; y++) for (let x = 0; x < 256; x++) {
+    const o = (Math.floor(y * h / 192) * w + Math.floor(x * w / 256)) * bpp;
+    let best = 1, bd = Infinity;
+    for (let i = 1; i < 16; i++) {
+      const q = TMS_PALETTE[i], dd = (px[o] - q[0]) ** 2 + (px[o + 1] - q[1]) ** 2 + (px[o + 2] - q[2]) ** 2;
+      if (dd < bd) { bd = dd; best = i; }
+    }
+    out[y * 256 + x] = best;
+  }
+  return out;
+}
+
 export function captureScreen(img: Uint8Array, d: DirEntry, rom: Uint8Array, frames = 450): Uint8Array {
   const m = buildMachine(defaultConfig('minivic'));
   m.loadRom(rom);
@@ -219,7 +259,7 @@ export function writeCatalog(img: Uint8Array, entries: CatEntry[], title: string
   return img;
 }
 
-export interface Options { sd: string; out: string; games: string; rom: string; title: string; previews?: string; songs?: boolean }
+export interface Options { sd: string; out: string; games: string; apps?: string; rom: string; title: string; previews?: string }
 
 export function buildCatalog(o: Options): CatEntry[] {
   let img = new Uint8Array(readFileSync(o.sd));
@@ -234,19 +274,25 @@ export function buildCatalog(o: Options): CatEntry[] {
     const title = info ? info.title : d.name.replace(/\w\S*/g, w => w[0] + w.slice(1).toLowerCase());
     const head = headerLines(title, info, inPlace);
     const desc = info ? fitText(info.desc, TEXT_COLS, DESC_LINES) : [];
-    return { slot: d.slot, kind: 1, title, lines: [...head, ...desc], _d: d } as CatEntry & { _d: DirEntry };
+    const shot = info ? join(o.games, 'screenshots', info.file + '_game.png') : '';
+    return { slot: d.slot, kind: 1, title, lines: [...head, ...desc], _d: d, _shot: shot } as CatEntry & { _d: DirEntry };
   }).sort((a, b) => a.title.localeCompare(b.title));
   const juke = dir.find(d => d.name.startsWith('JUKEBOX'));
   if (juke) {
     const songs = dir.filter(d => d.type === 4).map(d => d.name.replace(/\w\S*/g, w => w[0] + w.slice(1).toLowerCase()));
     const text = 'The MiniVIC Jukebox plays the songs of MiniVIC Sound on the two AY-3-8910 sound chips, '
       + 'in stereo. Choose a song with the joystick.' + (songs.length ? ` Songs on this card: ${songs.join(', ')}.` : '');
-    entries.push({ slot: juke.slot, kind: 2, title: 'MiniVIC Jukebox', lines: ['MiniVIC Sound', 'Music player', ...fitText(text, TEXT_COLS, DESC_LINES)], _d: juke } as any);
+    entries.push({ slot: juke.slot, kind: 2, title: 'MiniVIC Jukebox', lines: ['MiniVIC Sound', 'Music player', ...fitText(text, TEXT_COLS, DESC_LINES)], _d: juke,
+      _shot: o.apps ? join(o.apps, 'screenshots', 'jukebox_play.png') : '' } as any);
   }
   if (entries.length > 255) throw new Error('more than 255 entries');
   if (o.previews) mkdirSync(o.previews, { recursive: true });
   for (const e of entries as (CatEntry & { _d: DirEntry })[]) {
-    const pv = makePreview(captureScreen(img, e._d, rom));
+    const shot: string = (e as any)._shot;
+    const fromShot = !!shot && existsSync(shot);
+    const pv = makePreview(fromShot ? screenFromPng(shot) : captureScreen(img, e._d, rom));
+    (e as any).source = fromShot ? 'screenshot' : 'emulator';
+    delete (e as any)._shot;
     e.preview = { pat: pv.pat, col: pv.col };
     if (o.previews) writePngTo(o.previews, e._d.name, pv.px);
     delete (e as any)._d;

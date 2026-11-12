@@ -6,8 +6,10 @@
 ;
 ; RESET (and JT_SHOW_MENU, and the two START buttons held during a game) come here.
 ; 1. The list: a scrolling list of the games on the SD card (either joystick: UP/DOWN one
-;    game, LEFT/RIGHT one page, BUTTON 1 or START opens the game).
-; 2. The game page: a preview (title screen of the game, 128x96 pixels), who made the game
+;    game, LEFT/RIGHT one page, BUTTON 1 or START opens the game, BUTTON 2 the gallery).
+; 1b. The gallery (BUTTON 2 in the list): one game at a time with its gameplay picture, its name
+;    in the selection bar and the game that inspired it (see fe_gallery).
+; 2. The game page: a picture (gameplay screenshot of the game, 128x96 pixels), who made the game
 ;    that inspired it, the players and the description (UP/DOWN scroll it).
 ;    START or BUTTON 1 load and run the game, BUTTON 2 goes back to the list.
 ; Power-on shows the title screen first (tests_menu.s). The SERVICE switch opens the system test,
@@ -72,6 +74,7 @@ FE_DPAGES  = $1210          ; directory pages
 FE_IDX     = $1211          ; entry in the directory page
 FE_SPLASH  = $1212          ; 1 = title screen at this start (power-on / RESET)
 FE_TESTED  = $1213          ; 4 bytes: inputs pressed at least once in the joystick test (P1, P2, coins), count shown
+FE_MODE    = $1217          ; 0 = list, 1 = gallery (where BUTTON 2 of the game page goes back)
 FE_TITLE   = $1220          ; 32 bytes: cabinet title
 FE_TEXT    = $1000          ; text sector of the game page (also the directory buffer)
 FE_INDEX   = $2000          ; catalog index: 255 * 32 bytes, up to $3FDF
@@ -178,6 +181,8 @@ fe_no_games:                                ; no card, no directory, or nothing 
 ; THE LIST
 ; =============================================================================
 fe_list:
+    stz FE_MODE
+    jsr fe_fix_window                       ; (the gallery may have moved the selection)
     jsr g2_cls
     jsr fe_draw_title
     PUTS_AT 2, 1, txt_select
@@ -193,6 +198,10 @@ fe_list_loop:
     beq @not_open
     jmp fe_page
 @not_open:
+    bit #J_B2
+    beq @not_gallery
+    jmp fe_gallery
+@not_gallery:
     bit #J_UP
     beq @not_up
     lda FE_SEL
@@ -233,23 +242,28 @@ fe_list_loop:
     dec
 @moved:
     sta FE_SEL
-    ; keep the selection in the window
+    jsr fe_fix_window
+    jsr fe_draw_rows
+    jmp fe_list_loop
+
+; fe_fix_window: FE_TOP moved so that the selection is in the window of the list
+fe_fix_window:
+    lda FE_SEL
     cmp FE_TOP
     bcs @below_top
     sta FE_TOP
-    bra @draw
+    rts
 @below_top:
     sec
     sbc FE_TOP
     cmp #LIST_ROWS
-    bcc @draw
+    bcc @ok
     lda FE_SEL
     sec
     sbc #LIST_ROWS-1
     sta FE_TOP
-@draw:
-    jsr fe_draw_rows
-    jmp fe_list_loop
+@ok:
+    rts
 
 ; title bar (row 0, selection colours) with the cabinet title in the middle
 fe_draw_title:
@@ -360,26 +374,11 @@ fe_page:
     jsr g2_cls
     lda #0
     sta G_ROW
-    lda E_PTR
-    clc
-    adc #8
-    pha
-    lda E_PTR+1
-    adc #0
-    tax
-    pla
+    jsr fe_entry_name
     jsr g2_puts_center                      ; name on row 0, normal font: the patterns of the
                                             ; selection bar in this third are taken by the preview
     lda #1
-    sta G_ROW
-    stz G_COL
-    jsr g2_pos
-    ldx #32
-@line:
-    stz VDATA                               ; pattern 0 of the BIOS font: horizontal line
-    nop
-    dex
-    bne @line
+    jsr fe_hline
     PUTS_AT 23, 1, txt_page_help
     stz FE_TXTOFS
     stz FE_TXTN
@@ -427,11 +426,11 @@ fe_page_loop:
 @not_play:
     bit #J_B2
     beq @not_back
-    ldx #0
-    jsr g2_font_hilite                      ; patterns 128-255 of thirds 0 and 1: the font again
-    ldx #1
-    jsr g2_font_hilite
-    jmp fe_list
+    lda FE_MODE
+    beq @to_list
+    jmp fe_gal_draw                         ; back to the gallery
+@to_list:
+    jmp fe_back_to_list
 @not_back:
     bit #J_UP
     beq @not_up
@@ -652,6 +651,152 @@ fe_load_preview:
     rts
 @err:
     sec
+    rts
+
+; =============================================================================
+; THE GALLERY (BUTTON 2 in the list): one game at a time with its gameplay picture
+; (128 x 96, rows 2-13), the name in the selection bar and the game that inspired it.
+; LEFT/UP previous, RIGHT/DOWN next (wrapping), START or BUTTON 1 play,
+; BUTTON 3 the game page with the description, BUTTON 2 back to the list.
+; =============================================================================
+fe_gallery:
+    lda #1
+    sta FE_MODE
+fe_gal_draw:
+    lda FE_SEL
+    jsr fe_entry_ptr
+    jsr g2_cls
+    lda #0
+    sta G_ROW
+    lda #<FE_TITLE
+    ldx #>FE_TITLE
+    jsr g2_puts_center                      ; cabinet title, normal font (the picture uses
+                                            ; the patterns of the selection bar in thirds 0-1)
+    lda #1
+    jsr fe_hline
+    PUTS_AT 7, 5, txt_gal_left
+    PUTS_AT 7, 26, txt_gal_right
+    lda #16                                 ; name in the selection bar (third 2)
+    sta G_ROW
+    lda #$80
+    jsr g2_clear_row
+    jsr fe_entry_name
+    jsr g2_puts_center
+    stz G_ATTR
+    lda #14                                 ; "n/N" under the picture
+    sta G_ROW
+    lda #13
+    sta G_COL
+    jsr g2_pos
+    lda FE_SEL
+    inc
+    jsr g2_put_dec
+    lda #'/'
+    jsr g2_putc
+    lda FE_COUNT
+    jsr g2_put_dec
+    PUTS_AT 21, 1, txt_gal_help1
+    PUTS_AT 22, 1, txt_gal_help2
+    ; inspired by / maker and players
+    lda FE_HASCAT
+    beq @no_text
+    ldy #2
+    lda (E_PTR),y
+    sta G_T2                                ; flags
+    and #FLAG_TEXT
+    beq @no_text
+    jsr fe_page_lba
+    ldx #<FE_TEXT
+    ldy #>FE_TEXT
+    jsr fe_read
+    bcs @no_text
+    lda #18
+    ldx #0
+    jsr fe_text_line
+    lda #19
+    ldx #1
+    jsr fe_text_line
+    bra @picture
+@no_text:
+    PUTS_AT 18, 1, txt_no_text
+@picture:
+    lda FE_HASCAT
+    beq @no_picture
+    lda G_T2
+    and #FLAG_PREVIEW
+    beq @no_picture
+    jsr fe_load_preview
+    bcc fe_gal_loop
+@no_picture:
+    PUTS_AT 7, 11, txt_no_preview
+
+fe_gal_loop:
+    jsr fe_input
+    lda FE_NEW
+    bit #(J_START | J_B1)
+    beq @not_play
+    jmp fe_launch
+@not_play:
+    bit #J_B3
+    beq @not_page
+    jmp fe_page
+@not_page:
+    bit #J_B2
+    beq @not_back
+    jmp fe_back_to_list
+@not_back:
+    bit #(J_LEFT | J_UP)
+    beq @not_prev
+    lda FE_SEL
+    bne @p1
+    lda FE_COUNT
+@p1:
+    dec
+    sta FE_SEL
+    jmp fe_gal_draw
+@not_prev:
+    bit #(J_RIGHT | J_DOWN)
+    beq fe_gal_loop
+    lda FE_SEL
+    inc
+    cmp FE_COUNT
+    bcc @n1
+    lda #0
+@n1:
+    sta FE_SEL
+    jmp fe_gal_draw
+
+; fe_back_to_list: the font of the selection bar again in thirds 0 and 1, then the list
+fe_back_to_list:
+    ldx #0
+    jsr g2_font_hilite
+    ldx #1
+    jsr g2_font_hilite
+    jmp fe_list
+
+; fe_entry_name: A (lo) / X (hi) = name of entry E_PTR
+fe_entry_name:
+    lda E_PTR
+    clc
+    adc #8
+    pha
+    lda E_PTR+1
+    adc #0
+    tax
+    pla
+    rts
+
+; fe_hline: row A = horizontal line (pattern 0 of the BIOS font)
+fe_hline:
+    sta G_ROW
+    stz G_COL
+    jsr g2_pos
+    ldx #32
+@l:
+    stz VDATA
+    nop
+    dex
+    bne @l
     rts
 
 ; =============================================================================
@@ -1458,7 +1603,11 @@ txt_nogames:    .byte "NO GAMES FOUND ON THE SD", $0A, $0A
                 .byte "PRESS START TO TRY AGAIN", 0
 txt_select:     .byte "SELECT A GAME", 0
 txt_list_help1: .byte "STICK: CHOOSE, LEFT/RIGHT: PAGE", 0
-txt_list_help2: .byte "START OR BUTTON 1: GAME PAGE", 0
+txt_list_help2: .byte "START/B1: GAME   B2: GALLERY", 0
+txt_gal_left:   .byte "<", 0
+txt_gal_right:  .byte ">", 0
+txt_gal_help1:  .byte "STICK: GAME    START/B1: PLAY", 0
+txt_gal_help2:  .byte "B2: LIST    B3: DESCRIPTION", 0
 txt_version:    .byte "ARCADE BIOS ", BIOS_VER, 0
 txt_page_help:  .byte "START: PLAY    BUTTON 2: BACK", 0
 txt_no_text:    .byte "NO DESCRIPTION ON THIS SD CARD", 0

@@ -1,8 +1,8 @@
 // Adds the arcade catalog (list, previews, descriptions) to an SD image of bo6502-SDbuilder.
 //   node tools/make_arcade_sd.mjs [--sd IN.img] [--out OUT.img] [--games DIR] [--rom BIOS.bin]
-//                                 [--title "MINIVIC ARCADE"] [--previews DIR]
+//                                 [--apps DIR] [--title "MINIVIC ARCADE"] [--previews DIR]
 // Defaults: ../bo6502-SDbuilder/sd_full.img -> tmp/sd_arcade.img, ../MiniVIC Games (README.md,
-// gameslist.md), the KEYB/SD BIOS of ../bo6502-emulator (used to run the programs for the previews),
+// gameslist.md, screenshots/), ../MiniVIC Apps (screenshots/jukebox_play.png), the KEYB/SD BIOS of ../bo6502-emulator (used to run the programs for the previews),
 // previews as PNG in tmp/previews. The emulator sources are expected in ../bo6502-emulator.
 import { createRequire } from 'node:module';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -24,9 +24,10 @@ const entries = buildCatalog({
   sd: opt('sd', join(root, '..', 'bo6502-SDbuilder', 'sd_full.img')),
   out: opt('out', join(root, 'tmp', 'sd_arcade.img')),
   games: opt('games', join(root, '..', 'MiniVIC Games')),
+  apps: opt('apps', join(root, '..', 'MiniVIC Apps')),
   rom: opt('rom', join(EMU, 'public', 'roms', 'minivic_keybsd.bin')),
   title: opt('title', 'MINIVIC ARCADE'),
   previews: opt('previews', join(root, 'tmp', 'previews')),
 });
-for (const e of entries) console.log(`${String(e.slot).padStart(3)} ${e.kind === 2 ? 'music' : 'game '} ${e.title.padEnd(24)} ${e.lines[0] ?? ''} | ${e.lines[1] ?? ''}`);
+for (const e of entries) console.log(`${String(e.slot).padStart(3)} ${e.kind === 2 ? 'music' : 'game '} ${e.title.padEnd(24)} ${(e.source ?? '').padEnd(10)} ${e.lines[0] ?? ''} | ${e.lines[1] ?? ''}`);
 console.log(`${entries.length} entries`);

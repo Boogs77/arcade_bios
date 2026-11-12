@@ -3,7 +3,7 @@
 ROM image of the **Arcade6502**, the cabinet version of the miniVIC (BO6502): a 65C02 with TMS9918A video, two
 AY-3-8910, an SD card, a serial port and two JAMMA control panels, **without a keyboard**.
 It starts the machine on a **game front-end** driven by the joysticks: a scrolling list of the games on the SD,
-and a page for every game with a preview of its title screen, the game that inspired it and its description.
+a gallery with a gameplay picture of every game and the game that inspired it, and a page with its description.
 
 - `bin/arcade.bin`: the 32 KB image to program into the EEPROM (`$8000-$FFFF`).
 - [ARCADE.md](ARCADE.md): hardware, front-end, SD catalog format, jump table, RAM, tests.
@@ -15,7 +15,8 @@ and a page for every game with a preview of its title screen, the game that insp
 
 | Where | What |
 | :--- | :--- |
-| List | stick UP / DOWN choose, LEFT / RIGHT page, START or BUTTON 1 open |
+| List | stick UP / DOWN choose, LEFT / RIGHT page, START or BUTTON 1 open, BUTTON 2 gallery |
+| Gallery | stick previous / next game, START or BUTTON 1 play, BUTTON 3 description, BUTTON 2 list |
 | Game page | START or BUTTON 1 play, BUTTON 2 back, UP / DOWN scroll the text |
 | In a game | P1 START + P2 START held for 2 s: back to the front-end |
 | Power-on | title screen ARCADE 6502, a button skips it |
