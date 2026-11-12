@@ -10,8 +10,8 @@
 ; 2. The game page: a preview (title screen of the game, 128x96 pixels), who made the game
 ;    that inspired it, the players and the description (UP/DOWN scroll it).
 ;    START or BUTTON 1 load and run the game, BUTTON 2 goes back to the list.
-; Power-on shows the title screen first (tests_menu.s). The TEST switch opens the system test,
-; the SERVICE switch the joystick test. On the serial port: W WozMon, B BASIC,
+; Power-on shows the title screen first (tests_menu.s). The SERVICE switch opens the system test,
+; the TEST switch the joystick test. On the serial port: W WozMon, B BASIC,
 ; I system information, T system test, J joystick test (help is sent at every start).
 ;
 ; The list comes from the ARCADE CATALOG on the SD (written by tools/make_arcade_sd.mjs):
@@ -717,14 +717,14 @@ crt_puts:
 fe_input:
     jsr fe_input_nocmd
     lda FE_SYSNEW
-    bit #SYS_TEST
-    beq @no_test
-    jmp fe_systest
-@no_test:
     bit #SYS_SERVICE
     beq @no_service
-    jmp fe_joytest
+    jmp fe_systest
 @no_service:
+    bit #SYS_TEST
+    beq @no_test
+    jmp fe_joytest
+@no_test:
     lda ACIA_STATUS
     and #$08
     beq @rts

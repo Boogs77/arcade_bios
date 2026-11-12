@@ -149,7 +149,7 @@ big_colors:                                 ; foreground per line on dark blue: 
     .byte $B4,$B4,$A4,$A4,$94,$94,$84,$84
 
 ; =============================================================================
-; SYSTEM TEST (TEST switch, or T on the serial port): everything but the joysticks.
+; SYSTEM TEST (SERVICE switch, or T on the serial port): everything but the joysticks.
 ; CPU, ROM checksum, RAM $0200-$7FFF, VRAM 16 KB, VDP frame, SD card, games on the SD,
 ; a tone on each AY-3-8910 and a line on the serial port.
 ; RAM and VRAM are tested by writing and reading back two address-dependent patterns,
@@ -310,7 +310,7 @@ fe_systest:
 @loop:
     jsr fe_input_nocmd
     lda FE_SYSNEW
-    and #SYS_TEST
+    and #SYS_SERVICE
     bne @exit
     lda FE_NEW
     and #J_START
@@ -567,7 +567,7 @@ sd_type_lo:     .byte <txt_none, <txt_sdsc1, <txt_sdsc2, <txt_sdhc
 sd_type_hi:     .byte >txt_none, >txt_sdsc1, >txt_sdsc2, >txt_sdhc
 
 ; =============================================================================
-; JOYSTICK TEST (SERVICE switch, or J on the serial port)
+; JOYSTICK TEST (TEST switch, or J on the serial port)
 ; Every input of the two control panels (4 directions, buttons 1-3, START, COIN):
 ; "--" not pressed yet, "ON" pressed now, "OK" pressed at least once. All 18 tested: ALL OK.
 ; =============================================================================
@@ -628,7 +628,7 @@ fe_joytest:
     jsr fe_joy_cell                         ; COIN 2: bit 1
     jsr fe_joy_count
     lda FE_SYSNEW
-    and #SYS_SERVICE
+    and #SYS_TEST
     bne @exit
     lda ACIA_STATUS
     and #$08
@@ -738,7 +738,7 @@ txt_test_rows:  .byte "UP", $0A, "DOWN", $0A, "LEFT", $0A, "RIGHT", $0A
                 .byte "COIN", 0
 txt_joytest:    .byte "JOYSTICK TEST", 0
 txt_joy_help1:  .byte "PRESS EVERY BUTTON ONCE", 0
-txt_joy_help2:  .byte "SERVICE AGAIN: EXIT", 0
+txt_joy_help2:  .byte "TEST AGAIN: EXIT", 0
 txt_joy_all:    .byte "ALL 18 INPUTS OK", 0
 txt_joy_tested: .byte "TESTED ", 0
 txt_joy_of:     .byte "/18", 0
@@ -747,7 +747,7 @@ txt_sys_rows:   .byte "CPU 65C02", $0A, "ROM CHECKSUM", $0A, "RAM $0200-$7FFF", 
                 .byte "VRAM 16 KB", $0A, "VDP FRAME", $0A, "SD CARD", $0A, "GAMES ON SD", $0A
                 .byte "AUDIO RIGHT", $0A, "AUDIO LEFT", $0A, "SERIAL 6551", 0
 txt_sys_help1:  .byte "LISTEN: A TONE RIGHT, THEN LEFT", 0
-txt_sys_help2:  .byte "TEST AGAIN OR START: EXIT", 0
+txt_sys_help2:  .byte "SERVICE AGAIN OR START: EXIT", 0
 txt_ok:         .byte "OK", 0
 txt_fail:       .byte "FAIL", 0
 txt_fail_at:    .byte "FAIL $", 0

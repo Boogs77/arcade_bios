@@ -35,8 +35,8 @@ exit from a game go straight to the list.
 | :--- | :--- |
 | **List** of the games | UP / DOWN one game (with auto-repeat, wraps around), LEFT / RIGHT one page of 16, START or BUTTON 1 opens the game page |
 | **Game page**: preview, inspiring game, players, description | START or BUTTON 1 play, BUTTON 2 back, UP / DOWN scroll the description |
-| **System test** (TEST switch, `T` on the serial port) | everything but the joysticks, see below; exit with TEST again, START or a byte on the serial port |
-| **Joystick test** (SERVICE switch, `J` on the serial port) | the map of the 18 inputs, see below; exit with SERVICE again or a byte on the serial port |
+| **System test** (SERVICE switch, `T` on the serial port) | everything but the joysticks, see below; exit with SERVICE again, START or a byte on the serial port |
+| **Joystick test** (TEST switch, `J` on the serial port) | the map of the 18 inputs, see below; exit with TEST again or a byte on the serial port |
 
 A switch held at power-on opens its test before the list. Both joysticks drive the menus. The MiniVIC Jukebox is
 the last entry of the list: the songs are played only through it.

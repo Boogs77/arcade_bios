@@ -192,7 +192,7 @@ function titleScreen() {
 
 function joystickTest() {
   const a = bootList(SD_ARCADE);
-  a.setSys(SERVICE); a.frames(4); a.setSys(0);
+  a.setSys(TEST); a.frames(4); a.setSys(0);
   a.waitFor(() => a.rows()[0].includes('JOYSTICK TEST'), 30, 'joystick test');
   a.frames(2);
   assert(a.rows()[14].includes('TESTED 0/18'), 'nothing tested: ' + a.rows()[14]);
@@ -206,27 +206,27 @@ function joystickTest() {
   r = a.rows();
   assert(r[10].slice(13, 15) === 'OK' && r[11].slice(20, 22) === 'OK' && r[12].slice(13, 15) === 'OK', 'tested: OK');
   assert(r[14].includes('TESTED 3/18'), 'count: ' + r[14]);
-  // TEST does not leave the joystick test
+  // every input once
   for (const bit of [U, D, L, R, B1, B2, B3, ST]) { a.setJoy(bit, bit); a.frames(2); }
   a.setJoy(0, 0); a.setSys(COIN2); a.frames(2); a.setSys(0); a.frames(3);
   assert(a.rows()[14].includes('ALL 18 INPUTS OK'), 'all tested: ' + a.rows()[14]);
   a.shot('joystick_test_all');
-  a.setSys(SERVICE); a.frames(3); a.setSys(0);
+  a.setSys(TEST); a.frames(3); a.setSys(0);
   a.waitFor(() => inList(a), 30, 'back from the joystick test');
-  // SERVICE held at power-on
+  // TEST held at power-on
   const b = new Arcade(SD_ARCADE);
-  b.setSys(SERVICE);
+  b.setSys(TEST);
   b.waitFor(() => b.g2 && b.rows()[0].includes('JOYSTICK TEST'), 300, 'joystick test at power-on');
   b.setSys(0); b.frames(3);
   b.send('x');
   b.waitFor(() => inList(b) || b.rows().join('').includes('NO GAMES'), 900, 'out of the joystick test with the serial port');
-  console.log('      joystick test (SERVICE switch, every input mapped, coins): ok');
+  console.log('      joystick test (TEST switch, every input mapped, coins): ok');
 }
 
 function systemTest() {
   const a = bootList(SD_ARCADE);
   a.serial.length = 0;
-  a.setSys(TEST); a.frames(4); a.setSys(0);
+  a.setSys(SERVICE); a.frames(4); a.setSys(0);
   a.waitFor(() => a.rows()[11].includes('LINE SENT'), 1500, 'system test results');
   const r = a.rows();
   assert(r[0].includes('SYSTEM TEST'), 'title');
@@ -243,10 +243,10 @@ function systemTest() {
   // a bad ROM byte is found
   const bad = ROM.slice(); bad[0x1234] ^= 0xFF;
   const c = new Arcade(SD_ARCADE, bad);
-  c.setSys(TEST);
+  c.setSys(SERVICE);
   c.waitFor(() => c.g2 && c.rows()[11].includes('LINE SENT'), 2500, 'system test at power-on');
   assert(c.rows()[3].slice(21).trim() === 'FAIL', 'bad ROM checksum: ' + c.rows()[3]);
-  console.log('      system test (TEST switch: CPU, ROM, RAM, VRAM, VDP, SD, audio, serial): ok');
+  console.log('      system test (SERVICE switch: CPU, ROM, RAM, VRAM, VDP, SD, audio, serial): ok');
 }
 
 function serialCommands() {
