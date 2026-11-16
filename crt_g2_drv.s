@@ -9,6 +9,7 @@ NMI_HANDLER:
   PHY
   JSR $0FD0         ; CALL DISPATCH (IN RAM)
   LDA VREG          ; acknowledge VDP
+  JSR arc_coin_poll ; the coins of the cabinet: one credit per pulse (credits.s)
   LDA JOY_P1
   ORA JOY_P2
   BMI @released     ; bit 7 = 1: one of the START buttons is not pressed

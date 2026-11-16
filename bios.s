@@ -67,6 +67,7 @@ IRQ_HANDLER:
 .include "arcade_io.s"
 .include "frontend.s"
 .include "tests_menu.s"
+.include "credits.s"
 .include "crt_text_drv.s"
 .include "crt_g2_drv.s"
 

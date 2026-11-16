@@ -1,5 +1,6 @@
 .segment "PROGRAM"
-.define BIOS_VER "12.11.26 ARCADE"
+.define BIOS_DATE "16.11.26"
+.define BIOS_VER BIOS_DATE, " ARCADE"
 
 ; =============================================================================
 ; ARCADE FRONT-END: the game menu of the cabinet, driven by the joysticks.
@@ -16,12 +17,14 @@
 ; the TEST switch the joystick test. On the serial port: W WozMon, B BASIC,
 ; I system information, T system test, J joystick test (help is sent at every start).
 ;
-; The list comes from the ARCADE CATALOG on the SD (written by tools/make_arcade_sd.mjs):
+; The list comes from the ARCADE CATALOG on the SD (update_sd.py --mode arcade of bo6502-SDbuilder,
+; version 2; tools/make_arcade_sd.mjs, version 1):
 ;   sector CAT_LBA (24576, byte $00C00000), after the documents and the stories of the full SD:
-;     +0 "ARCD"  +4 version 1  +5 number of entries N (1..255)  +16 cabinet title (31 chars + $00)
+;     +0 "ARCD"  +4 version 1 or 2  +5 number of entries N (1..255)  +16 cabinet title (31 chars + $00)
 ;   sectors CAT_LBA+1...: the index, 32 bytes per entry (16 per sector):
 ;     +0 SD slot of the program   +1 kind (1 game, 2 music: the MiniVIC Jukebox)
-;     +2 flags (bit 0: preview, bit 1: text)   +3..+7 reserved   +8 name (23 chars + $00)
+;     +2 flags (bit 0: preview, bit 1: text)   +3 credits (version 2, see credits.s)
+;     +4 save zone (version 2, 0 = none)   +5..+7 reserved   +8 name (23 chars + $00)
 ;   sectors CAT_LBA + 64 + i*8 ... +6: the page of entry i
 ;     sector 0: 16 text lines of 32 bytes (31 chars + $00): line 0 inspired by, line 1 players,
 ;               lines 2-15 description (pre-wrapped at 30 columns, an empty line ends it)
@@ -128,6 +131,10 @@ fe_start:
     ldx #$FF
     txs
     sta FE_SPLASH
+    cmp #0
+    beq @keep                               ; JT_SHOW_MENU, a game left: the credits stay
+    stz CRED                                ; power-on / RESET: no credits (the VIA keeps its latches)
+@keep:
     jsr INIT_SERIAL                         ; (CLI: no interrupt source is enabled)
     jsr arc_io_init                         ; VIAs, sound off
     stz sd_type                             ; SD to be initialized again
@@ -188,11 +195,12 @@ fe_list:
     PUTS_AT 2, 1, txt_select
     PUTS_AT 21, 1, txt_list_help1
     PUTS_AT 22, 1, txt_list_help2
-    PUTS_AT 23, 1, txt_version
+    PUTS_AT 23, 1, txt_ver_short
     jsr fe_draw_rows
 
 fe_list_loop:
     jsr fe_input
+    jsr fe_cred_list
     lda FE_NEW
     bit #(J_START | J_B1)
     beq @not_open
@@ -202,6 +210,14 @@ fe_list_loop:
     beq @not_gallery
     jmp fe_gallery
 @not_gallery:
+    jsr fe_nav
+    bcc fe_list_loop
+    jsr fe_draw_rows
+    jmp fe_list_loop
+
+; fe_nav: A = new presses: UP/DOWN one row (wrapping), LEFT/RIGHT one page, in FE_SEL / FE_TOP
+; of FE_COUNT rows. C = 1 when the selection moved.
+fe_nav:
     bit #J_UP
     beq @not_up
     lda FE_SEL
@@ -230,7 +246,7 @@ fe_list_loop:
     bra @moved
 @not_left:
     bit #J_RIGHT
-    beq fe_list_loop
+    beq @none
     lda FE_SEL
     clc
     adc #LIST_ROWS
@@ -243,8 +259,11 @@ fe_list_loop:
 @moved:
     sta FE_SEL
     jsr fe_fix_window
-    jsr fe_draw_rows
-    jmp fe_list_loop
+    sec
+    rts
+@none:
+    clc
+    rts
 
 ; fe_fix_window: FE_TOP moved so that the selection is in the window of the list
 fe_fix_window:
@@ -419,9 +438,12 @@ fe_page:
 
 fe_page_loop:
     jsr fe_input
+    jsr fe_cred_game
     lda FE_NEW
     bit #(J_START | J_B1)
     beq @not_play
+    jsr fe_try_launch
+    bcs fe_page_loop                        ; INSERT COIN
     jmp fe_launch
 @not_play:
     bit #J_B2
@@ -732,9 +754,12 @@ fe_gal_draw:
 
 fe_gal_loop:
     jsr fe_input
+    jsr fe_cred_game
     lda FE_NEW
     bit #(J_START | J_B1)
     beq @not_play
+    jsr fe_try_launch
+    bcs fe_gal_loop                         ; INSERT COIN
     jmp fe_launch
 @not_play:
     bit #J_B3
@@ -861,6 +886,7 @@ crt_puts:
 ; port (W B I T J) and the TEST / SERVICE switches: those never come back here.
 fe_input:
     jsr fe_input_nocmd
+    jsr arc_coin_poll                       ; the coins (the VDP interrupt is off in the front-end)
     lda FE_SYSNEW
     bit #SYS_SERVICE
     beq @no_service
@@ -969,8 +995,14 @@ fe_go_info:
 ; THE LIST FROM THE SD
 ; =============================================================================
 ; fe_load_catalog: FE_COUNT, FE_TITLE and the index at FE_INDEX, from the arcade catalog
-; or, without it, from the SD directory. FE_COUNT = 0 if there is nothing.
+; or, without it, from the SD directory (FE_COUNT = 0 if there is nothing); then the FREE PLAY /
+; COIN settings (credits.s).
 fe_load_catalog:
+    jsr fe_load_list
+    jsr fe_load_sets
+    jmp fe_calc_allfree
+
+fe_load_list:
     stz FE_COUNT
     stz FE_HASCAT
     stz FE_SEL
@@ -1002,7 +1034,10 @@ fe_load_catalog:
     bpl @magic
     lda FE_TEXT+4
     cmp #1
+    beq @version
+    cmp #2
     bne @from_dir                           ; unknown version
+@version:
     lda FE_TEXT+5
     beq @from_dir
     sta FE_COUNT
@@ -1039,6 +1074,22 @@ fe_load_catalog:
     bne @idx
     lda #1
     sta FE_HASCAT
+    lda FE_TEXT+4                           ; (the header is still in FE_TEXT)
+    cmp #2
+    bcs @v2
+    ldx FE_COUNT                            ; version 1: no zones, no credit flags
+@v1:
+    dex
+    txa
+    jsr fe_entry_ptr
+    lda #0
+    ldy #IDX_FLAGS2
+    sta (E_PTR),y
+    iny
+    sta (E_PTR),y                           ; IDX_ZONE
+    cpx #0
+    bne @v1
+@v2:
     rts
 @fail:
     stz FE_COUNT
@@ -1094,6 +1145,10 @@ fe_list_from_dir:
     lda #0
     iny
     sta (E_PTR),y                           ; flags: no preview, no text
+    iny
+    sta (E_PTR),y                           ; no credit flags (FREE PLAY)
+    iny
+    sta (E_PTR),y                           ; no zone
     lda FE_SCAN
     asl
     asl
@@ -1380,6 +1435,8 @@ g2_cls:
     dey
     bne @l
     stz G_ATTR
+    lda #$80
+    sta FE_CSHOWN                           ; the credit field is drawn again
     rts
 
 ; g2_clear_row: A = attribute (0 / $80): row G_ROW = 32 spaces; G_ATTR = A, G_COL = 0
@@ -1609,7 +1666,8 @@ txt_gal_right:  .byte ">", 0
 txt_gal_help1:  .byte "STICK: GAME    START/B1: PLAY", 0
 txt_gal_help2:  .byte "B2: LIST    B3: DESCRIPTION", 0
 txt_version:    .byte "ARCADE BIOS ", BIOS_VER, 0
-txt_page_help:  .byte "START: PLAY    BUTTON 2: BACK", 0
+txt_ver_short:  .byte "BIOS ", BIOS_DATE, 0
+txt_page_help:  .byte "START:PLAY  B2:BACK", 0
 txt_no_text:    .byte "NO DESCRIPTION ON THIS SD CARD", 0
 txt_no_preview: .byte "NO PREVIEW", 0
 txt_loading:    .byte "LOADING FROM SD, PLEASE WAIT...", $0A, $0A, 0

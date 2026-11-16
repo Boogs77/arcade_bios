@@ -189,6 +189,7 @@ fe_systest:
     PUTS_AT 2, 1, txt_sys_rows
     PUTS_AT 21, 1, txt_sys_help1
     PUTS_AT 22, 1, txt_sys_help2
+    PUTS_AT 13, 1, txt_sys_settings
     ; CPU: INC A exists only on the 65C02 (a NOP on the NMOS 6502)
     lda #0
     .byte $1A                               ; INC A
@@ -313,6 +314,10 @@ fe_systest:
     and #SYS_SERVICE
     bne @exit
     lda FE_NEW
+    bit #J_B1
+    beq @no_settings
+    jmp fe_settings
+@no_settings:
     and #J_START
     bne @exit
     lda ACIA_STATUS
@@ -748,6 +753,7 @@ txt_sys_rows:   .byte "CPU 65C02", $0A, "ROM CHECKSUM", $0A, "RAM $0200-$7FFF", 
                 .byte "AUDIO RIGHT", $0A, "AUDIO LEFT", $0A, "SERIAL 6551", 0
 txt_sys_help1:  .byte "LISTEN: A TONE RIGHT, THEN LEFT", 0
 txt_sys_help2:  .byte "SERVICE AGAIN OR START: EXIT", 0
+txt_sys_settings: .byte "BUTTON 1: GAME SETTINGS", $0A, "(FREE PLAY OR COIN, EVERY GAME)", 0
 txt_ok:         .byte "OK", 0
 txt_fail:       .byte "FAIL", 0
 txt_fail_at:    .byte "FAIL $", 0

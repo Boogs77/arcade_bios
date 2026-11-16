@@ -32,6 +32,8 @@ JT_KB_SET_MODE:     jmp KB_SET_MODE         ; $FD21 - no keyboard: does nothing 
 ; --- Arcade BIOS ---
 JT_ARC_INPUTS:      jmp ARC_READ_INPUTS     ; $FD80 - A=P1, X=P2 (bit 0 UP,1 DOWN,2 LEFT,3 RIGHT,4 B1,5 B2,6 B3,7 START), Y=bit 0 COIN1,1 COIN2,2 TEST,3 SERVICE; 1 = pressed
 JT_ARC_SILENCE:     jmp AY_SILENCE          ; $FD83 - both AY-3-8910 silent; preserves X/Y
+JT_ARC_CREDITS:     jmp ARC_CREDITS         ; $FD86 - A=credits (0-9), C=1 the running program is in FREE PLAY; preserves X/Y
+JT_ARC_USE_CREDIT:  jmp ARC_USE_CREDIT      ; $FD89 - A=credits to take (1-2): C=0 taken (FREE PLAY: none taken), C=1 not enough (none taken); preserves X/Y
 
 .res $FE - (* - JT_CHROUT), 0
 ROM_SUM:            .word 0                 ; $FDFE - 16-bit sum of the ROM without these two bytes (written by make.sh, checked by the system test)

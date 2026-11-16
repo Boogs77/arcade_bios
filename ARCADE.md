@@ -36,7 +36,8 @@ exit from a game go straight to the list.
 | **List** of the games | UP / DOWN one game (with auto-repeat, wraps around), LEFT / RIGHT one page of 16, START or BUTTON 1 opens the game page, BUTTON 2 the gallery |
 | **Gallery**: one game at a time, gameplay picture (a quarter of the screen), name in the selection bar, inspiring game, maker and players | LEFT / UP previous, RIGHT / DOWN next (wraps around), START or BUTTON 1 play, BUTTON 3 game page, BUTTON 2 back to the list (same game selected) |
 | **Game page**: gameplay picture, inspiring game, players, description | START or BUTTON 1 play, BUTTON 2 back (to the list or the gallery), UP / DOWN scroll the description |
-| **System test** (SERVICE switch, `T` on the serial port) | everything but the joysticks, see below; exit with SERVICE again, START or a byte on the serial port |
+| **System test** (SERVICE switch, `T` on the serial port) | everything but the joysticks, see below; BUTTON 1 opens GAME SETTINGS; exit with SERVICE again, START or a byte on the serial port |
+| **GAME SETTINGS** (BUTTON 1 in the system test) | FREE PLAY or COIN for every game, see "Credits"; UP / DOWN choose, LEFT / RIGHT page, BUTTON 1 change, BUTTON 2 or SERVICE save and go to the list |
 | **Joystick test** (TEST switch, `J` on the serial port) | the map of the 18 inputs, see below; exit with TEST again or a byte on the serial port |
 
 A switch held at power-on opens its test before the list. Both joysticks drive the menus. The MiniVIC Jukebox is
@@ -59,11 +60,54 @@ the last entry of the list: the songs are played only through it.
 Every input of the two control panels: UP, DOWN, LEFT, RIGHT, BUTTON 1-3, START and COIN for P1 and P2.
 `--` not pressed yet, `ON` pressed now, `OK` pressed at least once; `TESTED n/18`, then `ALL 18 INPUTS OK`.
 
-The coins are not used by the front-end yet; the games use buttons 1 and 2 (they will be adapted later).
-
 **Leaving a game**: hold **P1 START and P2 START together for 2 seconds**. The NMI handler of the BIOS (called at
 every frame by the VDP) counts the frames and goes back to the front-end. The counter is kept in the T1 latch of
-the joystick VIA (`$D586`), so no RAM byte of the game is touched; the VIA timer is never started.
+the joystick VIA (`$D586`), so no RAM byte of the game is touched; the VIA timer is never started. A game that
+turns the VDP interrupt off while it draws gets fewer NMIs: in Asteroids it takes about 4 seconds.
+
+### Credits
+
+- **1 coin = 1 credit, at most 9** (a coin beyond 9 is lost: there is no lockout coil). Each COIN input counts once
+  per pulse; the pulse must last at least one frame (17 ms; coin mechanisms give 30-100 ms).
+- The credits are counted **by the BIOS**: in the front-end (every frame) and during a game (the NMI handler, every
+  frame). They stay when a game is left and are lost at power-on / RESET.
+- While a picture or a game is read from the SD (about 1 s, no frame is waited for) the SD driver looks at the
+  coins after every byte: a coin inserted then is not lost.
+- The credit field at the bottom right: in the list `CREDITS n` (`FREE PLAY` when every game is in free play);
+  in the gallery and the game page the state of that game: `FREE PLAY`, `CREDITS n`, or `INSERT COIN`.
+- **The games adapted to the cabinet** (catalog: the game handles the credits) start in their title: P1 START
+  = 1 player (1 credit), P2 START = 2 players (2 credits), through `JT_ARC_CREDITS` / `JT_ARC_USE_CREDIT`. The
+  front-end launches them without taking anything.
+- **The other programs** (Zork, Times Tables, Little 6502 Guy...): in COIN mode the front-end takes one credit
+  when they are launched (`INSERT COIN` and no launch without one).
+- At every launch the front-end writes in bit 4 of the credit byte whether the program is in FREE PLAY.
+
+The credit byte is `$D587`, the T1 latch high of the joystick VIA (a byte of storage like `JOY_HOLD`; writing it
+does not start the timer, and the W65C22 keeps its latches through a RESET, so the BIOS clears it at power-on):
+
+| Bits | Meaning |
+| :--- | :--- |
+| 0-3 | credits, 0-9 |
+| 4 | the program running now is in FREE PLAY |
+| 5 / 6 | COIN 1 / COIN 2 pressed at the last sample (edge) |
+
+The NMI and the front-end see press and release of the coins; `JT_ARC_CREDITS` and the SD reads only the press
+(`TSB` on the edge bit), so a coin is never counted twice. `JT_ARC_USE_CREDIT` takes the credits with one `DEC`
+each (a single read-modify-write: an NMI never falls in the middle).
+
+**FREE PLAY or COIN** is chosen per game in GAME SETTINGS (the two `ALL GAMES` rows set every game). The page lists
+the games with a save zone, in the order of the list (not the Jukebox). It is saved on the SD, one sector, only
+when something changed: save area, **zone 0, sector 1** (sector `32769`, see `SD_SALVATAGGI.md`):
+
+| Byte | Contents |
+| :--- | :--- |
+| `0-3` | `"ARCS"` |
+| `4` | version `1` |
+| `16 + z` | setting of the game of zone `z`: 0 = as the catalog, 1 = FREE PLAY, 2 = COIN |
+| `510-511` | 16-bit sum of the bytes 0-509 (little endian) |
+
+By zone, so it stays right when the order of the SD changes. Without a valid sector the catalog defaults count.
+Entries without a zone (catalog version 1, the list from the directory, the Jukebox) are always in FREE PLAY.
 
 A game starts exactly as from the SD menu of the miniVIC: text mode with the BIOS font, `[GAME] Name` on the
 serial port, `JMP` to its entry point.
@@ -78,14 +122,16 @@ In WozMon, `FD0FR` goes back to the front-end.
 
 ## 💾 The arcade catalog on the SD
 
-`tools/make_arcade_sd.mjs` adds the catalog to an SD image of
-[bo6502-SDbuilder](https://github.com/Boogs77/bo6502-SDbuilder) (`sd_full.img` by default). It lives in the free
-space of the full SD, after the stories of the miniVIC Z-Machine and before the save area:
+The cabinet SD is made by `update_sd.py --mode arcade` of
+[bo6502-SDbuilder](https://github.com/Boogs77/bo6502-SDbuilder), from `arcade.json` of the Arcade Games
+repository (games adapted to the coins and START): catalog **version 2**. `tools/make_arcade_sd.mjs` of this
+repository adds a version 1 catalog to `sd_full.img` (the miniVIC games, for the tests). The catalog lives after
+the stories of the miniVIC Z-Machine and before the save area:
 
 | Sector | Contents |
 | :--- | :--- |
-| `24576` (`$00C00000`) | header: `"ARCD"`, version `1`, number of entries N (1-255); cabinet title at `+16` (31 chars + `$00`) |
-| `24577` ... | index, 32 bytes per entry (16 per sector): `+0` SD slot, `+1` kind (1 game, 2 music), `+2` flags (bit 0 preview, bit 1 text), `+8` name (23 chars + `$00`) |
+| `24576` (`$00C00000`) | header: `"ARCD"`, version `2` (`1` is still read), number of entries N (1-255); cabinet title at `+16` (31 chars + `$00`) |
+| `24577` ... | index, 32 bytes per entry (16 per sector): `+0` SD slot, `+1` kind (1 game, 2 music), `+2` flags (bit 0 preview, bit 1 text), `+3` credits (bit 0 COIN by default, bit 1 the game handles the credits, bit 2 uses START, bit 3 uses button 3), `+4` save zone (0 = none), `+8` name (23 chars + `$00`); in version 1 `+3` and `+4` are 0 (free play, no zone) |
 | `24576 + 64 + i*8` | page of entry i, sector 0: 16 text lines of 32 bytes: line 0 inspiring game, line 1 maker / players, lines 2-15 description (30 columns, an empty line ends it) |
 | `... + 1` to `+ 3` | preview patterns: 192 tiles (16 x 12, by rows) of 8 bytes |
 | `... + 4` to `+ 6` | preview colours: 192 x 8 bytes (foreground << 4 \| background) |
@@ -126,6 +172,8 @@ entries the miniVIC BIOS adds later; the Arcade entries start at `$FD80`.
 | `$FD21` | `JT_KB_SET_MODE` | no keyboard: does nothing |
 | `$FD80` | `JT_ARC_INPUTS` | A = P1, X = P2 (bits as above), Y = bit 0 COIN 1, 1 COIN 2, 2 TEST, 3 SERVICE; **1 = pressed** |
 | `$FD83` | `JT_ARC_SILENCE` | both AY-3-8910 silent |
+| `$FD86` | `JT_ARC_CREDITS` | A = credits (0-9), C = 1 if the program running now is in FREE PLAY; preserves X and Y |
+| `$FD89` | `JT_ARC_USE_CREDIT` | A = credits to take (1 or 2): C = 0 taken (in FREE PLAY nothing is taken), C = 1 not enough (nothing taken); preserves X and Y |
 | `$FDFE` | `ROM_SUM` | data: ROM checksum (not a jump) |
 
 ---
@@ -134,7 +182,9 @@ entries the miniVIC BIOS adds later; the Arcade entries start at `$FD80`.
 
 - `$0306` last joystick state of `JT_CHRIN_NOECHO`; the SD driver as in the KEYB/SD BIOS (`$0300-$033A`, zero page `$44-$4E`).
 - Front-end only (free again once a program is loaded): zero page `$50-$5D` (tests `$60-$69`), `$1000-$11FF` sector buffer,
-  `$1200-$123F` state, `$2000-$3FDF` catalog index, `$4000-$4BFF` preview.
+  `$1200-$123F` state, `$1300-$13FF` rows of GAME SETTINGS, `$1400-$14FF` FREE PLAY / COIN by zone,
+  `$2000-$3FDF` catalog index, `$4000-$4BFF` preview.
+- I/O used as storage: `$D586` START hold counter, `$D587` credits (T1 latches of the joystick VIA).
 - VRAM in the front-end: patterns `$0000`, colours `$2000`, names `$3800`, sprites off.
 
 ---
@@ -145,15 +195,19 @@ entries the miniVIC BIOS adds later; the Arcade entries start at `$FD80`.
 keyboard, 8-bit joystick ports, coins and switches on the SD VIA): list, paging, auto-repeat, game page with
 preview and scrolling, gallery (browse, game page and back, play), launch with `[GAME] BUBBLES`, exit with both START, Jukebox, title screen, joystick test and
 system test (also at power-on, and a bad ROM byte), serial commands, SD without the catalog, no card, jump table and
-`JT_ARC_INPUTS`. Screenshots in `screenshots/`.
+`JT_ARC_INPUTS`. With the cabinet SD of bo6502-SDbuilder (catalog version 2) and an emulated save area: coins
+(one per pulse, at most 9), GAME SETTINGS (all, one game, the sector on the SD, read back after power-on),
+`INSERT COIN` for Times Tables, Asteroids launched without taking a credit and a coin counted by the NMI in its
+title, credits kept when the game is left, a game in FREE PLAY, a coin while a picture is read,
+`JT_ARC_CREDITS` / `JT_ARC_USE_CREDIT`. Screenshots in `screenshots/`.
 
 ---
 
 ## ❓ Open points
 
-- Coins (credits) and the games with button 3 / START: later.
-- The emulator does not have the Arcade machine yet (`docs/TODO.md` of the emulator).
-- bo6502-SDbuilder could call `tools/make_arcade_sd.mjs` after `update_sd.py --mode full`.
+- The emulator has the Arcade6502 machine and this BIOS as `public/roms/arcade.bin`: it must be updated together
+  with its `sd_arcade.img.gz` (the 12.11.26 BIOS does not read the catalog version 2 and shows the list from the
+  directory).
 
 ---
 

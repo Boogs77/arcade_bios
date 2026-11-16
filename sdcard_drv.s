@@ -684,11 +684,17 @@ sd_read_loop:
 
 @full:
   ; --- whole sector: 512 bytes (256 + 256) ---
+  ; After every byte the coins are looked at (8 cycles): a coin inserted while a picture or a
+  ; game is read is not lost (cred_tap, credits.s; PORTA_SD bit 6 COIN 1, bit 7 COIN 2, active low)
   LDY #0
   LDX #0
 @p1:
   JSR sd_readbyte
   STA (sd_zp_ptr),Y
+  BIT PORTA_SD               ; N = COIN 2, V = COIN 1 (1 = not pressed)
+  BPL @t1
+  BVC @t1
+@r1:
   INY
   DEX
   BNE @p1
@@ -696,6 +702,10 @@ sd_read_loop:
 @p2:
   JSR sd_readbyte
   STA (sd_zp_ptr),Y
+  BIT PORTA_SD
+  BPL @t2
+  BVC @t2
+@r2:
   INY
   DEX
   BNE @p2
@@ -717,6 +727,12 @@ sd_read_loop:
   INC sd_sector
 @again:
   JMP @next                  ; (JMP: the loop body is longer than a branch)
+@t1:
+  JSR cred_tap
+  BRA @r1
+@t2:
+  JSR cred_tap
+  BRA @r2
 
 ; sd_wait_token: waits for the $FE token that comes before the data of a block (max ~1.5 s).
 ; Output: C=0 token arrived, C=1 error token or timeout. Clobbers X and Y.

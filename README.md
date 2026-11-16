@@ -7,6 +7,8 @@ a gallery with a gameplay picture of every game and the game that inspired it, a
 
 - `bin/arcade.bin`: the 32 KB image to program into the EEPROM (`$8000-$FFFF`).
 - [ARCADE.md](ARCADE.md): hardware, front-end, SD catalog format, jump table, RAM, tests.
+- The cabinet SD (games adapted to coins and START, catalog): `update_sd.py --mode arcade` of
+  [bo6502-SDbuilder](https://github.com/Boogs77/bo6502-SDbuilder).
 - Games: [miniVIC_games](https://github.com/Boogs77/miniVIC_games). Hardware: [arcade_65c02](https://github.com/Boogs77/arcade_65c02).
 
 ---
@@ -19,6 +21,8 @@ a gallery with a gameplay picture of every game and the game that inspired it, a
 | Gallery | stick previous / next game, START or BUTTON 1 play, BUTTON 3 description, BUTTON 2 list |
 | Game page | START or BUTTON 1 play, BUTTON 2 back, UP / DOWN scroll the text |
 | In a game | P1 START + P2 START held for 2 s: back to the front-end |
+| COIN P1 / P2 | one coin = one credit, at most 9, counted by the BIOS (also during a game); shown at the bottom right of the front-end |
+| System test | BUTTON 1: GAME SETTINGS, FREE PLAY or COIN for every game or for all of them, saved on the SD |
 | Power-on | title screen ARCADE 6502, a button skips it |
 | Anywhere in the front-end | SERVICE switch: system test (CPU, ROM, RAM, VRAM, VDP, SD, audio, serial); TEST switch: joystick test |
 | Serial terminal (19200 8-N-1) | `W` WozMon, `B` BASIC, `I` information, `T` system test, `J` joystick test |
@@ -33,8 +37,8 @@ and [miniVIC_games](https://github.com/Boogs77/miniVIC_games) in folders next to
 
 ```
 sh make.sh                          # -> tmp/arcade.bin
-node tools/make_arcade_sd.mjs       # sd_full.img of bo6502-SDbuilder + arcade catalog -> tmp/sd_arcade.img
-node test/run.mjs                   # prints ALL OK
+node tools/make_arcade_sd.mjs       # sd_full.img of bo6502-SDbuilder + arcade catalog (version 1) -> tmp/sd_arcade.img
+node test/run.mjs                   # prints ALL OK (also uses sd_arcade.img of bo6502-SDbuilder: update_sd.py --mode arcade)
 cp tmp/arcade.bin bin/              # publish a new version
 ```
 
