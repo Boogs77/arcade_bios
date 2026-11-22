@@ -1,7 +1,7 @@
 # 🕹️ Arcade BIOS: how it works
 
 The Arcade BIOS is the ROM of the **Arcade6502**, the cabinet version of the miniVIC: same CPU, memory and boards,
-but **no keyboard**, two JAMMA control panels and a game front-end instead of the text menu.
+but **no keyboard**, the single JAMMA interface (with the controls of both players) and a game front-end instead of the text menu.
 It starts from the miniVIC BIOS **03.11.26 KEYB/SD** ([miniVIC_bios](https://github.com/Boogs77/miniVIC_bios)).
 
 ---
