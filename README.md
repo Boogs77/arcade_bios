@@ -39,13 +39,6 @@ Five-minute explanatory videos, in Italian and English, with subtitles. Click a 
 <td align="center"><a href="https://youtu.be/8jpY8511fZo"><img src="https://img.youtube.com/vi/8jpY8511fZo/mqdefault.jpg" width="300" alt="The Arcade6502 cabinet: front-end, credits and catalog (Italiano)"></a><br>Italiano</td>
 </tr></table>
 
-**The whole project: from the modular BO6502 to miniPET, miniVIC and Arcade6502**
-
-<table><tr>
-<td align="center"><a href="https://youtu.be/3ln8cZt3MQk"><img src="https://img.youtube.com/vi/3ln8cZt3MQk/mqdefault.jpg" width="300" alt="The whole project: from the modular BO6502 to miniPET, miniVIC and Arcade6502 (Italiano)"></a><br>Italiano</td>
-<td align="center"><a href="https://youtu.be/d8nvmrTR-eE"><img src="https://img.youtube.com/vi/d8nvmrTR-eE/mqdefault.jpg" width="300" alt="The whole project: from the modular BO6502 to miniPET, miniVIC and Arcade6502 (English)"></a><br>English</td>
-</tr></table>
-
 ## 🛠️ Build
 
 Needs ca65/ld65 from [cc65](https://cc65.github.io/), Node.js, and the
