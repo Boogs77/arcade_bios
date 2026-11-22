@@ -29,6 +29,13 @@ a gallery with a gameplay picture of every game and the game that inspired it, a
 
 ---
 
+## 🎬 Videos
+
+Five-minute explanatory videos, in Italian and English, with subtitles:
+
+* **The Arcade6502 cabinet: front-end, credits and catalog**: [Italiano](https://youtu.be/8jpY8511fZo)
+* **The whole project: from the modular BO6502 to miniPET, miniVIC and Arcade6502**: [Italiano](https://youtu.be/3ln8cZt3MQk) · [English](https://youtu.be/d8nvmrTR-eE)
+
 ## 🛠️ Build
 
 Needs ca65/ld65 from [cc65](https://cc65.github.io/), Node.js, and the
