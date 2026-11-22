@@ -1,7 +1,7 @@
 # 🕹️ Arcade BIOS
 
 ROM image of the **Arcade6502**, the cabinet version of the miniVIC (BO6502): a 65C02 with TMS9918A video, two
-AY-3-8910, an SD card, a serial port and two JAMMA control panels, **without a keyboard**.
+AY-3-8910, an SD card, a serial port and the JAMMA interface of the cabinet (a single connector, with the controls of both players), **without a keyboard**.
 It starts the machine on a **game front-end** driven by the joysticks: a scrolling list of the games on the SD,
 a gallery with a gameplay picture of every game and the game that inspired it, and a page with its description.
 
