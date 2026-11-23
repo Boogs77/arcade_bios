@@ -6,7 +6,7 @@ It starts from the miniVIC BIOS **03.11.26 KEYB/SD** ([miniVIC_bios](https://git
 
 ---
 
-## 🔌 Hardware (schematic `Arcade6502.sch`)
+## 🔌 Hardware (schematic [`hardware/Arcade6502.sch`](hardware/Arcade6502.sch), Eagle format)
 
 | Board | Chip | Address | Notes |
 | :--- | :--- | :--- | :--- |
