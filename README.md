@@ -36,8 +36,8 @@ Five-minute explanatory videos, in Italian and English, with subtitles. Click a 
 **The Arcade6502 cabinet: front-end, credits and catalog**
 
 <table><tr>
-<td align="center"><a href="https://youtu.be/NhGXI1poAd0"><img src="https://img.youtube.com/vi/NhGXI1poAd0/mqdefault.jpg" width="300" alt="The Arcade6502 cabinet: front-end, credits and catalog (Italiano)"></a><br>Italiano</td>
-<td align="center"><a href="https://youtu.be/A2SKctljwV0"><img src="https://img.youtube.com/vi/A2SKctljwV0/mqdefault.jpg" width="300" alt="The Arcade6502 cabinet: front-end, credits and catalog (English)"></a><br>English</td>
+<td align="center"><a href="https://youtu.be/REYh9U_n7xc"><img src="https://img.youtube.com/vi/REYh9U_n7xc/mqdefault.jpg" width="300" alt="The Arcade6502 cabinet: front-end, credits and catalog (Italiano)"></a><br>Italiano</td>
+<td align="center"><a href="https://youtu.be/MMaXC_gYyok"><img src="https://img.youtube.com/vi/MMaXC_gYyok/mqdefault.jpg" width="300" alt="The Arcade6502 cabinet: front-end, credits and catalog (English)"></a><br>English</td>
 </tr></table>
 
 ## 🛠️ Build
